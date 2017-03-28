@@ -1,0 +1,9 @@
+Flou Gaussien:
+
+1.	Densité de probabilité de la loi normale à deux dimensions g(x,y) : FAIT ----- source [1]
+
+2.	Le paramètre de déviation standart (sigma) donne la dispersion autour de la moyenne : plus le sigma est petit plus la courbe est resserrée
+	autour de l'axe, plus le sigma est grand plus la courbe couvre beaucoup plus de valeurs.
+	
+3.	La valeur de mu pour que P( m - mu < X < m + mu )=0.95 est   " mu = 1.96*sigma " qu'on pourra considérer comme " 2*sigma "
+	Utilisation du tableau des valeurs de la loi normale centrée réduite ----- source [2]
