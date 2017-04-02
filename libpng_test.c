@@ -25,7 +25,6 @@ png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers;
 
-
 void read_png_file(char *filename) {
   FILE *fp = fopen(filename, "rb");
 
@@ -128,43 +127,23 @@ void write_png_file(char *filename) {
   fclose(fp);
 }
 
-void png_to_tab(png_bytep * px_tab) {
-
-	for(int y = 0; y < height; y++) {
-		png_bytep row = row_pointers[y];
-		for(int x = 0; x < width; x++) {
-		  png_bytep px = &(row[x * 4]);
-
-		  px_tab[y*width+x]=px;
-
-
-		  //printf("%4d, %4d = RGBA(%d, %d, %d, %d)\n", x, y, px[0], px[1], px[2], px[3]);
-		}
-	}
+void process_png_file() {
+  for(int y = 0; y < height; y++) {
+    png_bytep row = row_pointers[y];
+    for(int x = 0; x < width; x++) {
+      png_bytep px = &(row[x * 4]);
+      // Do something awesome for each pixel here...
+      //printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
+  if(argc != 3) abort();
 
-	if(argc<2){
-		perror("Manque d'arguments");
-		exit(1);
-	}
+  read_png_file(argv[1]);
+  process_png_file();
+  write_png_file(argv[2]);
 
-	printf("\n-------------------Chargement de l'image-------------------\n\n");
-
-
-	read_png_file(argv[1]);
-	printf("Height : %d\nWidth : %d\n", height, width );
-
-	printf("\n----------------Création du tableau de pixel----------------\n\n");
-
-
-	png_bytep px_tab[height*width];
-
-	png_to_tab(px_tab);
-
-
-
-
-	return 0;
+  return 0;
 }
