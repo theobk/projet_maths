@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -lpng
+CFLAGS = -Wall -Wextra -lpng -lm
 
 all : utils_png
 

@@ -1,3 +1,4 @@
 [1]  http://web.cortial.net/optim/annexe2.html
+     https://en.wikipedia.org/wiki/Gaussian_blur
 
 [2] http://math.univ-lyon1.fr/~gannaz/Cours/TablesStat.pdf
