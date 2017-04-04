@@ -1,30 +1,3 @@
-/*
- * A simple libpng example program
- * http://zarb.org/~gc/html/libpng.html
- *
- * Modified by Yoshimasa Niwa to make it much simpler
- * and support all defined color_type.
- *
- * To build, use the next instruction on OS X.
- * $ brew install libpng
- * $ clang -lz -lpng15 libpng_test.c
- *
- * Copyright 2002-2010 Guillaume Cottenceau.
- *
- * This software may be freely redistributed under the terms
- * of the X11 license.
- *
- */
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <png.h>
-
-int width, height;
-png_byte color_type;
-png_byte bit_depth;
-png_bytep *row_pointers;
-
 void read_png_file(char *filename) {
   FILE *fp = fopen(filename, "rb");
 
@@ -84,7 +57,6 @@ void read_png_file(char *filename) {
 }
 
 void write_png_file(char *filename) {
-  int y;
 
   FILE *fp = fopen(filename, "wb");
   if(!fp) abort();
@@ -127,23 +99,17 @@ void write_png_file(char *filename) {
   fclose(fp);
 }
 
-void process_png_file() {
-  for(int y = 0; y < height; y++) {
-    png_bytep row = row_pointers[y];
-    for(int x = 0; x < width; x++) {
-      png_bytep px = &(row[x * 4]);
-      // Do something awesome for each pixel here...
-      //printf("%4d, %4d = RGBA(%3d, %3d, %3d, %3d)\n", x, y, px[0], px[1], px[2], px[3]);
-    }
-  }
-}
+void tab_to_png(png_bytep * px_tab_flou){
 
-int main(int argc, char *argv[]) {
-  if(argc != 3) abort();
+	png_bytep *row_pointers_new;
+	png_bytep row;
 
-  read_png_file(argv[1]);
-  process_png_file();
-  write_png_file(argv[2]);
-
-  return 0;
+	row_pointers_new = (png_bytep*)malloc(sizeof(png_bytep) * height);
+	for(int y = 0; y < height; y++) {
+	  row_pointers[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+	  for(int x = 0; x < width; x++){
+		  row[x*4]=px_tab_flou[x];
+	  }
+	  row_pointers_new[y]=row;
+	}
 }

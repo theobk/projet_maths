@@ -25,6 +25,7 @@ int width, height;
 png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers;
+png_bytep *row_pointers_flou;
 
 
 void read_png_file(char *filename) {
@@ -85,7 +86,8 @@ void read_png_file(char *filename) {
   fclose(fp);
 }
 
-void write_png_file(char *filename) {
+void write_png_file(char *filename, png_bytep *row_pointers_generique) {
+  int y;
 
   FILE *fp = fopen(filename, "wb");
   if(!fp) abort();
@@ -117,35 +119,148 @@ void write_png_file(char *filename) {
   // Use png_set_filler().
   //png_set_filler(png, 0, PNG_FILLER_AFTER);
 
-  png_write_image(png, row_pointers);
+  png_write_image(png, row_pointers_generique);
   png_write_end(png, NULL);
 
   for(int y = 0; y < height; y++) {
-    free(row_pointers[y]);
+    free(row_pointers_generique[y]);
   }
-  free(row_pointers);
+  free(row_pointers_generique);
 
   fclose(fp);
 }
 
-void png_to_tab(png_bytep * px_tab, png_bytep * px_tab_flou) {
+double flou_gauss_point(int x, int y, int sigma){
+	return 1. / (2 * M_PI * sigma * sigma) * exp(-(x * x + y * y) / (2 * sigma * sigma));
+}
+
+void flou_stuct_png(int sigma){
+
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if(!png) abort();
+
+	png_infop info = png_create_info_struct(png);
+	if(!info) abort();
+
+	row_pointers_flou = (png_bytep*)malloc(sizeof(png_bytep) * height);
+	for(int y = 0; y < height; y++) {
+	  row_pointers_flou[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+	}
+
+	int mu=2*sigma;
 
 	for(int y = 0; y < height; y++) {
-		png_bytep row = row_pointers[y];
 		for(int x = 0; x < width; x++) {
-		  png_bytep px = &(row[x * 4]);
+		  int buff;
 
-		  px_tab[y*width+x]=px;
-		  px_tab_flou[y*width+x]=px;
+		//   int R = row_pointers[y][x*4];
+		//   int G = row_pointers[y][x*4+1];
+		//   int B = row_pointers[y][x*4+2];
+		  //
+		  //
+		//   printf("%d / %d / %d\n", R, G, B);
 
+		  if(mu%2==0){
+			  buff = mu/2-1;
+		  }
+		  else {
+			  buff = mu/2;
+		  }
+
+		  double resR=0;
+		  double resG=0;
+		  double resB=0;
+		  double resA=0;
+		  double summGauss=0;
+
+		  double g=0;
+
+		  for(int i =-(buff) ; i<buff; i++){
+			  for(int j = -1*buff; j<buff; j++){
+
+				  if(y+i < 0 || x+j < 0 || y+i >= height || x+j >= width){
+				  }
+				  else {
+
+					  g=flou_gauss_point(i, j, sigma);
+
+					  summGauss += g;
+
+					  png_bytep px = &row_pointers[y+i][(x+j)*4];
+
+					//   printf("R : %d\n", px[0]);
+					//   printf("G : %d\n", px[1]);
+					//   printf("B : %d\n", px[2]);
+					//   printf("A : %d\n", px[3]);
+					  //
+					  //
+					//   printf("g : %f\n\n", g);
+
+					  resR += g * px[0];
+					  resG += g * px[1];
+					  resB += g * px[2];
+					  resA += g * px[3];
+
+
+
+				  }
+			  }
+		  }
+		  row_pointers_flou[y][x*4]=resR/summGauss;
+		  row_pointers_flou[y][x*4+1]=resG/summGauss;
+		  row_pointers_flou[y][x*4+2]=resB/summGauss;
+		  row_pointers_flou[y][x*4+3]=resA/summGauss;
 
 		  //printf("%4d, %4d = RGBA(%d, %d, %d, %d)\n", x, y, px[0], px[1], px[2], px[3]);
 		}
 	}
 }
 
-double flou_gauss_point(int x, int y, double sigma){
-	return 1. / (2 * M_PI * sigma * sigma) * exp(-(x * x + y * y) / (2 * sigma * sigma));
+void print_row_pointer(png_bytep *row_pointers_print, char *s){
+	for(int y = 0; y < height; y++) {
+		for(int x = 0; x < width; x++) {
+			  int R = row_pointers_print[y][x*4];
+			  int G = row_pointers_print[y][x*4+1];
+			  int B = row_pointers_print[y][x*4+2];
+			  int A = row_pointers_print[y][x*4+3];
+
+
+			  printf("%d / %d / %d/ %d\n", R, G, B, A);
+		}
+	}
+
+	printf("%s\n", s);
+}
+
+void deriv_tab(png_bytep * px_tab_flou, png_bytep * px_tab_deriv){
+	for(int y = 0; y < height; y++) {
+		for(int x = 0; x < width; x++) {
+			double stencil[5];
+
+			stencil[0]=1/12;
+			stencil[1]=-8/12;
+			stencil[2]=0;
+			stencil[3]=8/12;
+			stencil[4]=-1/12;
+
+			px_tab_deriv[y*width+x][0]=0;
+			px_tab_deriv[y*width+x][1]=0;
+			px_tab_deriv[y*width+x][2]=0;
+			px_tab_deriv[y*width+x][3]=0;
+
+			for(int i = -2; i<3; i++){
+				px_tab_deriv[y*width+x][0]+=px_tab_flou[y*width+x+i][0]*stencil[i+2];
+				px_tab_deriv[y*width+x][0]+=px_tab_flou[y+i*width+x][0]*stencil[i+2];
+				px_tab_deriv[y*width+x][1]+=px_tab_flou[y*width+x+i][1]*stencil[i+2];
+				px_tab_deriv[y*width+x][1]+=px_tab_flou[y+i*width+x][1]*stencil[i+2];
+				px_tab_deriv[y*width+x][2]+=px_tab_flou[y*width+x+i][2]*stencil[i+2];
+				px_tab_deriv[y*width+x][2]+=px_tab_flou[y+i*width+x][2]*stencil[i+2];
+				px_tab_deriv[y*width+x][3]+=px_tab_flou[y*width+x+i][3]*stencil[i+2];
+				px_tab_deriv[y*width+x][3]+=px_tab_flou[y+i*width+x][3]*stencil[i+2];
+			}
+
+		}
+	}
 }
 
 void flou_tab(png_bytep * px_tab, png_bytep * px_tab_flou, double sigma, int mu){
@@ -162,13 +277,10 @@ void flou_tab(png_bytep * px_tab, png_bytep * px_tab_flou, double sigma, int mu)
 			}
 
 			double resR=0;
-			double sumR=0;
 			double resG=0;
-			double sumG=0;
 			double resB=0;
-			double sumB=0;
 			double resA=0;
-			double sumA=0;
+			double summGauss=0;
 
 			double g=0;
 
@@ -176,21 +288,12 @@ void flou_tab(png_bytep * px_tab, png_bytep * px_tab_flou, double sigma, int mu)
 				for(int j = -1*buff; j<buff; j++){
 
 					if(y+i < 0 || x+j < 0 || y+i >= height || x+j >= width){
-						perror("en dehors de l'image\n");
 					}
 					else {
-						g=flou_gauss_point(y+i, x+j, sigma);
 
-						printf("x+j : %d, y+i : %d\n",x+j,y+i);
+						g=flou_gauss_point(i, j, sigma);
 
-						sumR += px_tab[((y+i) * width)+(x+j)][0];
-
-						sumG += px_tab[((y+i) * width)+(x+j)][1];
-
-						sumB += px_tab[((y+i) * width)+(x+j)][2];
-
-						sumA += px_tab[((y+i) * width)+(x+j)][3];
-
+						summGauss += g;
 
 						resR += g * px_tab[((y+i) * width)+(x+j)][0];
 
@@ -203,13 +306,12 @@ void flou_tab(png_bytep * px_tab, png_bytep * px_tab_flou, double sigma, int mu)
 				}
 			}
 
-			printf("Avant les ajouts dans tab_flou\n");
-			px_tab_flou[y*width+x][0]=resR/sumR;
-			px_tab_flou[y*width+x][1]=resG/sumG;
-			px_tab_flou[y*width+x][2]=resB/sumB;
-			px_tab_flou[y*width+x][3]=resA/sumA;
-			printf("Après les ajouts dans tab_flou\n");
-
+			//printf("Avant les ajouts dans tab_flou /%f/%f/%f/%f\n", resR, resG, resB, resA);
+			px_tab_flou[y*width+x][0]=resR/summGauss;
+			px_tab_flou[y*width+x][1]=resG/summGauss;
+			px_tab_flou[y*width+x][2]=resB/summGauss;
+			px_tab_flou[y*width+x][3]=resA/summGauss;
+			//printf("Après les ajouts dans tab_flou /%f/%f/%f/%f\n",resR/summGauss,resG/summGauss, resB/summGauss, resA/summGauss );
 
 		}
 	}
@@ -223,7 +325,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	int sigma=4;
-	int mu=2*sigma;
 
 	printf("\n-------------------Chargement de l'image-------------------\n\n");
 
@@ -231,24 +332,21 @@ int main(int argc, char *argv[]) {
 	read_png_file(argv[1]);
 	printf("Height : %d\nWidth : %d\n", height, width );
 
-	printf("\n----------------Création du tableau de pixel----------------\n\n");
+	//write_png_file("res.png", row_pointers);
 
-	png_bytep px_tab[height*width];
-	png_bytep px_tab_flou[height*width];
-
-	png_to_tab(px_tab, px_tab_flou);
-
-	printf("Tableau créé\n");
 
 	printf("\n----------------Application du flou Gaussien----------------\n\n");
 
-	double res=flou_gauss_point(5,5, 4.);
+	flou_stuct_png(sigma);
 
-	printf("%f\n", res);
+	print_row_pointer(row_pointers, "Pas Flou");
 
-	flou_tab(px_tab, px_tab_flou,sigma, mu);
+	printf("\n--------------------Ecriture de l'image--------------------\n\n");
+
+	//write_png_file("res.png", row_pointers_flou);
 
 
+	//deriv_tab(px_tab_flou, px_tab_deriv);
 
 
 	return 0;
