@@ -26,6 +26,10 @@ png_byte color_type;
 png_byte bit_depth;
 png_bytep *row_pointers;
 png_bytep *row_pointers_flou;
+png_bytep *row_pointers_diff;
+png_bytep *row_pointers_deriv;
+
+
 
 
 void read_png_file(char *filename) {
@@ -48,16 +52,12 @@ void read_png_file(char *filename) {
   color_type = png_get_color_type(png, info);
   bit_depth  = png_get_bit_depth(png, info);
 
-  // Read any color_type into 8bit depth, RGBA format.
-  // See http://www.libpng.org/pub/png/libpng-manual.txt
-
   if(bit_depth == 16)
     png_set_strip_16(png);
 
   if(color_type == PNG_COLOR_TYPE_PALETTE)
     png_set_palette_to_rgb(png);
 
-  // PNG_COLOR_TYPE_GRAY_ALPHA is always 8 or 16bit depth.
   if(color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
     png_set_expand_gray_1_2_4_to_8(png);
 
@@ -83,10 +83,12 @@ void read_png_file(char *filename) {
 
   png_read_image(png, row_pointers);
 
+  printf("C'est bon\n");
+
   fclose(fp);
 }
 
-void write_png_file(char *filename, png_bytep *row_pointers_generique) {
+void write_png_file(char *filename, png_bytep *row_pointers_print) {
   int y;
 
   FILE *fp = fopen(filename, "wb");
@@ -106,7 +108,7 @@ void write_png_file(char *filename, png_bytep *row_pointers_generique) {
   png_set_IHDR(
     png,
     info,
-    width, height,
+    width-100, height-100,
     8,
     PNG_COLOR_TYPE_RGBA,
     PNG_INTERLACE_NONE,
@@ -117,15 +119,15 @@ void write_png_file(char *filename, png_bytep *row_pointers_generique) {
 
   // To remove the alpha channel for PNG_COLOR_TYPE_RGB format,
   // Use png_set_filler().
-  //png_set_filler(png, 0, PNG_FILLER_AFTER);
+  // png_set_filler(png, 0, PNG_FILLER_AFTER);
 
-  png_write_image(png, row_pointers_generique);
+  png_write_image(png, row_pointers_print);
   png_write_end(png, NULL);
 
   for(int y = 0; y < height; y++) {
-    free(row_pointers_generique[y]);
+    free(row_pointers_print[y]);
   }
-  free(row_pointers_generique);
+  free(row_pointers_print);
 
   fclose(fp);
 }
@@ -148,6 +150,9 @@ void flou_stuct_png(int sigma){
 	}
 
 	int mu=2*sigma;
+
+
+	int nbPix=0;
 
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
@@ -178,7 +183,8 @@ void flou_stuct_png(int sigma){
 		  for(int i =-(buff) ; i<buff; i++){
 			  for(int j = -1*buff; j<buff; j++){
 
-				  if(y+i < 0 || x+j < 0 || y+i >= height || x+j >= width){
+				  if(y+i < 0 || x+j < 0 || y+i >= height-1 || x+j >= width-1){
+
 				  }
 				  else {
 
@@ -186,7 +192,7 @@ void flou_stuct_png(int sigma){
 
 					  summGauss += g;
 
-					  png_bytep px = &row_pointers[y+i][(x+j)*4];
+					  png_bytep px = &(row_pointers[y+i][(x+j)*4]);
 
 					//   printf("R : %d\n", px[0]);
 					//   printf("G : %d\n", px[1]);
@@ -206,17 +212,30 @@ void flou_stuct_png(int sigma){
 				  }
 			  }
 		  }
-		  row_pointers_flou[y][x*4]=resR/summGauss;
-		  row_pointers_flou[y][x*4+1]=resG/summGauss;
-		  row_pointers_flou[y][x*4+2]=resB/summGauss;
-		  row_pointers_flou[y][x*4+3]=resA/summGauss;
+
+		  // Ces 4 lignes rendent la création de l'image impossioble mais je ne sais pas pourquoi
+
+				row_pointers_flou[y][x*4]=(int)(resR/summGauss);
+				row_pointers_flou[y][x*4+1]=(int)(resG/summGauss);
+				row_pointers_flou[y][x*4+2]=(int)(resB/summGauss);
+				row_pointers_flou[y][x*4+3]=(int)(resA/summGauss);
+
+
+		  nbPix++;
 
 		  //printf("%4d, %4d = RGBA(%d, %d, %d, %d)\n", x, y, px[0], px[1], px[2], px[3]);
 		}
+
 	}
+
+	printf("C'est bon\n");
+
+
 }
 
-void print_row_pointer(png_bytep *row_pointers_print, char *s){
+void print_row_pointer(png_bytep *row_pointers_print){
+
+	printf("%d\n", row_pointers_print[0][0]);
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
 			  int R = row_pointers_print[y][x*4];
@@ -228,93 +247,87 @@ void print_row_pointer(png_bytep *row_pointers_print, char *s){
 			  printf("%d / %d / %d/ %d\n", R, G, B, A);
 		}
 	}
-
-	printf("%s\n", s);
 }
 
-void deriv_tab(png_bytep * px_tab_flou, png_bytep * px_tab_deriv){
+void deriv_row_pointer(png_bytep *row_pointers_base){
+
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if(!png) abort();
+
+	png_infop info = png_create_info_struct(png);
+	if(!info) abort();
+
+	row_pointers_deriv = (png_bytep*)malloc(sizeof(png_bytep) * height);
+	for(int y = 0; y < height; y++) {
+	  row_pointers_deriv[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+	}
+
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
 			double stencil[5];
 
-			stencil[0]=1/12;
-			stencil[1]=-8/12;
-			stencil[2]=0;
-			stencil[3]=8/12;
-			stencil[4]=-1/12;
+			stencil[0]=1./12.;
+			stencil[1]=-8./12.;
+			stencil[2]=0.;
+			stencil[3]=8./12.;
+			stencil[4]=-1./12.;
 
-			px_tab_deriv[y*width+x][0]=0;
-			px_tab_deriv[y*width+x][1]=0;
-			px_tab_deriv[y*width+x][2]=0;
-			px_tab_deriv[y*width+x][3]=0;
+
+			row_pointers_deriv[y][x*4]=0;
+			row_pointers_deriv[y][x*4+1]=0;
+			row_pointers_deriv[y][x*4+2]=0;
+			row_pointers_deriv[y][x*4+3]=0;
+
 
 			for(int i = -2; i<3; i++){
-				px_tab_deriv[y*width+x][0]+=px_tab_flou[y*width+x+i][0]*stencil[i+2];
-				px_tab_deriv[y*width+x][0]+=px_tab_flou[y+i*width+x][0]*stencil[i+2];
-				px_tab_deriv[y*width+x][1]+=px_tab_flou[y*width+x+i][1]*stencil[i+2];
-				px_tab_deriv[y*width+x][1]+=px_tab_flou[y+i*width+x][1]*stencil[i+2];
-				px_tab_deriv[y*width+x][2]+=px_tab_flou[y*width+x+i][2]*stencil[i+2];
-				px_tab_deriv[y*width+x][2]+=px_tab_flou[y+i*width+x][2]*stencil[i+2];
-				px_tab_deriv[y*width+x][3]+=px_tab_flou[y*width+x+i][3]*stencil[i+2];
-				px_tab_deriv[y*width+x][3]+=px_tab_flou[y+i*width+x][3]*stencil[i+2];
-			}
 
-		}
-	}
-}
+				if(y+i>height-1 || y+i<0 || x+i>width-1 || x+i<0){
 
-void flou_tab(png_bytep * px_tab, png_bytep * px_tab_flou, double sigma, int mu){
+				}
+				else{
+					row_pointers_deriv[y][x*4]+=row_pointers_base[y][(x+i)*4]*stencil[i+2];
+					row_pointers_deriv[y][x*4]+=row_pointers_base[y+i][(x)*4]*stencil[i+2];
 
-	for(int y = 0; y < height; y++) {
-		for(int x = 0; x < width; x++) {
-			int buff;
+					row_pointers_deriv[y][x*4+1]+=row_pointers_base[y][(x+i)*4+1]*stencil[i+2];
+					row_pointers_deriv[y][x*4+1]+=row_pointers_base[y+i][(x)*4+1]*stencil[i+2];
 
-			if(mu%2==0){
-				buff = mu/2-1;
-			}
-			else {
-				buff = mu/2;
-			}
+					row_pointers_deriv[y][x*4+2]+=row_pointers_base[y][(x+i)*4+2]*stencil[i+2];
+					row_pointers_deriv[y][x*4+2]+=row_pointers_base[y+i][(x)*4+2]*stencil[i+2];
 
-			double resR=0;
-			double resG=0;
-			double resB=0;
-			double resA=0;
-			double summGauss=0;
-
-			double g=0;
-
-			for(int i =-(buff) ; i<buff; i++){
-				for(int j = -1*buff; j<buff; j++){
-
-					if(y+i < 0 || x+j < 0 || y+i >= height || x+j >= width){
-					}
-					else {
-
-						g=flou_gauss_point(i, j, sigma);
-
-						summGauss += g;
-
-						resR += g * px_tab[((y+i) * width)+(x+j)][0];
-
-						resG += g * px_tab[((y+i) * width)+(x+j)][1];
-
-						resB += g * px_tab[((y+i) * width)+(x+j)][2];
-
-						resA += g * px_tab[((y+i) * width)+(x+j)][3];
-					}
+					row_pointers_deriv[y][x*4+3]+=row_pointers_base[y][(x+i)*4+3]*stencil[i+2];
+					row_pointers_deriv[y][x*4+3]+=row_pointers_base[y+i][(x)*4+3]*stencil[i+2];
 				}
 			}
 
-			//printf("Avant les ajouts dans tab_flou /%f/%f/%f/%f\n", resR, resG, resB, resA);
-			px_tab_flou[y*width+x][0]=resR/summGauss;
-			px_tab_flou[y*width+x][1]=resG/summGauss;
-			px_tab_flou[y*width+x][2]=resB/summGauss;
-			px_tab_flou[y*width+x][3]=resA/summGauss;
-			//printf("Après les ajouts dans tab_flou /%f/%f/%f/%f\n",resR/summGauss,resG/summGauss, resB/summGauss, resA/summGauss );
-
 		}
 	}
+	printf("C'est bon\n");
+}
+
+void diff_row_pointer(png_bytep *row_pointers_baseA, png_bytep *row_pointers_baseB){
+
+	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+	if(!png) abort();
+
+	png_infop info = png_create_info_struct(png);
+	if(!info) abort();
+
+	row_pointers_diff = (png_bytep*)malloc(sizeof(png_bytep) * height);
+	for(int y = 0; y < height; y++) {
+	  row_pointers_diff[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
+	}
+
+	for(int y = 0; y < height; y++) {
+		for(int x = 0; x < width; x++) {
+			row_pointers_diff[y][x*4]=row_pointers_baseA[y][x*4]-row_pointers_baseB[y][x*4];
+			//printf("%d - %d\n", row_pointers_baseA[y][x*4], row_pointers_baseB[y][x*4]);
+			row_pointers_diff[y][x*4+1]=row_pointers_baseA[y][x*4+1]-row_pointers_baseB[y][x*4+1];
+			row_pointers_diff[y][x*4+2]=row_pointers_baseA[y][x*4+2]-row_pointers_baseB[y][x*4+2];
+			row_pointers_diff[y][x*4+3]=row_pointers_baseA[y][x*4+3]-row_pointers_baseB[y][x*4+3];
+		}
+	}
+
+	printf("C'est bon\n\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -339,15 +352,24 @@ int main(int argc, char *argv[]) {
 
 	flou_stuct_png(sigma);
 
-	print_row_pointer(row_pointers, "Pas Flou");
+	//print_row_pointer(row_pointers_flou);
 
 	printf("\n--------------------Ecriture de l'image--------------------\n\n");
 
 	//write_png_file("res.png", row_pointers_flou);
 
+	printf("Nous avons malheuresement un problème d'écriture d'image.\nAprès de noumbreuses heures/années de recherche nous n'avons pu trouver la solution...\n");
 
-	//deriv_tab(px_tab_flou, px_tab_deriv);
+	printf("\n---------------------Dérivée de l'image---------------------\n\n");
 
+	deriv_row_pointer(row_pointers_flou);
+	//print_row_pointer(row_pointers_deriv);
+
+
+	printf("\n---------------------Différences entre les deux images---------------------\n\n");
+
+	diff_row_pointer(row_pointers, row_pointers_flou);
+	//print_row_pointer(row_pointers_diff);
 
 	return 0;
 }
