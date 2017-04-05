@@ -352,12 +352,12 @@ void diff_row_pointer(){
 
 int main(int argc, char *argv[]) {
 
-	if(argc<2){
-		perror("Manque d'arguments : Deux images png à comparer");
+	if(argc<3){
+		perror("Manque d'arguments : Deux images png à comparer et sgma du flou gaussien");
 		exit(1);
 	}
 
-	int sigma=4;
+	int sigma=atoi(argv[3]);
 
 	printf("\n-------------------Chargement de l'image-------------------\n\n");
 
@@ -389,14 +389,14 @@ int main(int argc, char *argv[]) {
 	printf("Dérivée en x et en y\n");
 	deriv_row_pointer(row_pointers_flou_A, 'A');
 	deriv_row_pointer(row_pointers_flou_B, 'B');
-	//print_row_pointer(row_pointers_deriv);
+	//print_row_pointer(row_pointers_deriv_A);
 
 
-	printf("\n---------------------Différences entre les deux images---------------------\n\n");
+	//printf("\n---------------------Différences entre les deux images---------------------\n\n");
 
-	printf("Différence entre les deux images\n");
+	//printf("Différence entre les deux images\n");
 
-	printf("Ca marchait mais ça ne marche plus...\n");
+	//printf("Ca marchait mais ça ne marche plus...\n");
 
 	//diff_row_pointer();
 	/*
