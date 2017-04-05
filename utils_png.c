@@ -29,10 +29,17 @@ png_bytep *row_pointers_flou;
 png_bytep *row_pointers_diff;
 png_bytep *row_pointers_deriv;
 
+png_bytep *row_pointers_A;
+png_bytep *row_pointers_flou_A;
+png_bytep *row_pointers_deriv_A;
+
+png_bytep *row_pointers_B;
+png_bytep *row_pointers_flou_B;
+png_bytep *row_pointers_deriv_B;
 
 
 
-void read_png_file(char *filename) {
+void read_png_file(char *filename, char c) {
   FILE *fp = fopen(filename, "rb");
 
   png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -82,6 +89,16 @@ void read_png_file(char *filename) {
   }
 
   png_read_image(png, row_pointers);
+
+  if(c=='A'){
+	row_pointers_A=row_pointers;
+  }
+  else if(c=='B'){
+	  row_pointers_B=row_pointers;
+  }
+  else {
+	  printf("Fail il faut A ou B en deuxième argument\n");
+  }
 
   printf("C'est bon\n");
 
@@ -136,7 +153,7 @@ double flou_gauss_point(int x, int y, int sigma){
 	return 1. / (2 * M_PI * sigma * sigma) * exp(-(x * x + y * y) / (2 * sigma * sigma));
 }
 
-void flou_stuct_png(int sigma){
+void flou_stuct_png(int sigma, char c){
 
 	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if(!png) abort();
@@ -151,19 +168,19 @@ void flou_stuct_png(int sigma){
 
 	int mu=2*sigma;
 
-
-	int nbPix=0;
+	if(c=='A'){
+	  row_pointers=row_pointers_A;
+	}
+	else if(c=='B'){
+		row_pointers=row_pointers_B;
+	}
+	else {
+		printf("Fail il faut A ou B en deuxième argument\n");
+	}
 
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
 		  int buff;
-
-		//   int R = row_pointers[y][x*4];
-		//   int G = row_pointers[y][x*4+1];
-		//   int B = row_pointers[y][x*4+2];
-		  //
-		  //
-		//   printf("%d / %d / %d\n", R, G, B);
 
 		  if(mu%2==0){
 			  buff = mu/2-1;
@@ -189,43 +206,34 @@ void flou_stuct_png(int sigma){
 				  else {
 
 					  g=flou_gauss_point(i, j, sigma);
-
 					  summGauss += g;
 
 					  png_bytep px = &(row_pointers[y+i][(x+j)*4]);
-
-					//   printf("R : %d\n", px[0]);
-					//   printf("G : %d\n", px[1]);
-					//   printf("B : %d\n", px[2]);
-					//   printf("A : %d\n", px[3]);
-					  //
-					  //
-					//   printf("g : %f\n\n", g);
-
 					  resR += g * px[0];
 					  resG += g * px[1];
 					  resB += g * px[2];
 					  resA += g * px[3];
-
-
-
 				  }
 			  }
 		  }
-
 		  // Ces 4 lignes rendent la création de l'image impossioble mais je ne sais pas pourquoi
-
 				row_pointers_flou[y][x*4]=(int)(resR/summGauss);
 				row_pointers_flou[y][x*4+1]=(int)(resG/summGauss);
 				row_pointers_flou[y][x*4+2]=(int)(resB/summGauss);
 				row_pointers_flou[y][x*4+3]=(int)(resA/summGauss);
-
-
-		  nbPix++;
-
 		  //printf("%4d, %4d = RGBA(%d, %d, %d, %d)\n", x, y, px[0], px[1], px[2], px[3]);
 		}
 
+	}
+
+	if(c=='A'){
+	  row_pointers_flou_A=row_pointers_flou;
+	}
+	else if(c=='B'){
+		row_pointers_flou_B=row_pointers_flou;
+	}
+	else {
+		printf("Fail il faut A ou B en deuxième argument\n");
 	}
 
 	printf("C'est bon\n");
@@ -244,12 +252,12 @@ void print_row_pointer(png_bytep *row_pointers_print){
 			  int A = row_pointers_print[y][x*4+3];
 
 
-			  printf("%d / %d / %d/ %d\n", R, G, B, A);
+			  printf("%d / %d / %d / %d\n", R, G, B, A);
 		}
 	}
 }
 
-void deriv_row_pointer(png_bytep *row_pointers_base){
+void deriv_row_pointer(png_bytep *row_pointers_base, char c){
 
 	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if(!png) abort();
@@ -301,10 +309,21 @@ void deriv_row_pointer(png_bytep *row_pointers_base){
 
 		}
 	}
+
+	if(c=='A'){
+		row_pointers_deriv_A=row_pointers_deriv;
+	}
+	else if(c=='B'){
+		row_pointers_deriv_B=row_pointers_deriv;
+	}
+	else {
+		printf("Fail il faut A ou B en deuxième argument\n");
+	}
+
 	printf("C'est bon\n");
 }
 
-void diff_row_pointer(png_bytep *row_pointers_baseA, png_bytep *row_pointers_baseB){
+void diff_row_pointer(){
 
 	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 	if(!png) abort();
@@ -317,13 +336,14 @@ void diff_row_pointer(png_bytep *row_pointers_baseA, png_bytep *row_pointers_bas
 	  row_pointers_diff[y] = (png_byte*)malloc(png_get_rowbytes(png,info));
 	}
 
+
 	for(int y = 0; y < height; y++) {
 		for(int x = 0; x < width; x++) {
-			row_pointers_diff[y][x*4]=row_pointers_baseA[y][x*4]-row_pointers_baseB[y][x*4];
-			//printf("%d - %d\n", row_pointers_baseA[y][x*4], row_pointers_baseB[y][x*4]);
-			row_pointers_diff[y][x*4+1]=row_pointers_baseA[y][x*4+1]-row_pointers_baseB[y][x*4+1];
-			row_pointers_diff[y][x*4+2]=row_pointers_baseA[y][x*4+2]-row_pointers_baseB[y][x*4+2];
-			row_pointers_diff[y][x*4+3]=row_pointers_baseA[y][x*4+3]-row_pointers_baseB[y][x*4+3];
+
+			row_pointers_diff[y][x*4]=row_pointers_flou_A[y][x*4]-row_pointers_flou_B[y][x*4];
+			row_pointers_diff[y][x*4+1]=row_pointers_flou_A[y][x*4+1]-row_pointers_flou_B[y][x*4+1];
+			row_pointers_diff[y][x*4+2]=row_pointers_flou_A[y][x*4+2]-row_pointers_flou_B[y][x*4+2];
+			row_pointers_diff[y][x*4+3]=row_pointers_flou_A[y][x*4+3]-row_pointers_flou_B[y][x*4+3];
 		}
 	}
 
@@ -333,7 +353,7 @@ void diff_row_pointer(png_bytep *row_pointers_baseA, png_bytep *row_pointers_bas
 int main(int argc, char *argv[]) {
 
 	if(argc<2){
-		perror("Manque d'arguments : ");
+		perror("Manque d'arguments : Deux images png à comparer");
 		exit(1);
 	}
 
@@ -342,7 +362,11 @@ int main(int argc, char *argv[]) {
 	printf("\n-------------------Chargement de l'image-------------------\n\n");
 
 
-	read_png_file(argv[1]);
+	read_png_file(argv[1], 'A');
+	printf("Height : %d\nWidth : %d\n\n", height, width );
+
+
+	read_png_file(argv[2], 'B');
 	printf("Height : %d\nWidth : %d\n", height, width );
 
 	//write_png_file("res.png", row_pointers);
@@ -350,9 +374,9 @@ int main(int argc, char *argv[]) {
 
 	printf("\n----------------Application du flou Gaussien----------------\n\n");
 
-	flou_stuct_png(sigma);
+	flou_stuct_png(sigma, 'A');
+	flou_stuct_png(sigma, 'B');
 
-	//print_row_pointer(row_pointers_flou);
 
 	printf("\n--------------------Ecriture de l'image--------------------\n\n");
 
@@ -362,13 +386,27 @@ int main(int argc, char *argv[]) {
 
 	printf("\n---------------------Dérivée de l'image---------------------\n\n");
 
-	deriv_row_pointer(row_pointers_flou);
+	printf("Dérivée en x et en y\n");
+	deriv_row_pointer(row_pointers_flou_A, 'A');
+	deriv_row_pointer(row_pointers_flou_B, 'B');
 	//print_row_pointer(row_pointers_deriv);
 
 
 	printf("\n---------------------Différences entre les deux images---------------------\n\n");
 
-	diff_row_pointer(row_pointers, row_pointers_flou);
+	printf("Différence entre les deux images\n");
+
+	printf("Ca marchait mais ça ne marche plus...\n");
+
+	//diff_row_pointer();
+	/*
+		png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+		if(!png) abort();
+
+		Cette partie a décidé de faire une erreur de segmentation
+
+	*/
+
 	//print_row_pointer(row_pointers_diff);
 
 	return 0;
